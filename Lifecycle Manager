@@ -1,0 +1,52 @@
+provider "aws" {
+  region = "us-west-2"
+}
+
+resource "aws_iam_role" "dlm_role" {
+  name = "dlm-exec-role"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "dlm.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_dlm_lifecycle_policy" "example" {
+  count = length(data.aws_instances.tagged_instances.ids)
+
+  description         = "My DLM Policy"
+  execution_role_arn = aws_iam_role.dlm_role.arn
+  policy_details {
+    resource_types = ["VOLUME"]
+    schedules {
+      name = "MySchedule"
+      create_rule {
+        interval      = 24
+        interval_unit = "HOURS"
+        times         = ["01:00"]
+        location      = "CLOUD"
+        retain_rule {
+          count = 3
+        }
+      }
+    }
+  }
+}
+
+data "aws_instances" "tagged_instances" {
+  instance_tags = {
+    "my-tag-key" = "my-tag-value"  # Replace with your specific tag key-value pair
+  }
+}
+
+output "dlm_policy_ids" {
+  value = aws_dlm_lifecycle_policy.example[*].id
+}
